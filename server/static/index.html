@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Audio Stream</title>
+</head>
+<body>
+    <h1>Continuous Audio Stream</h1>
+
+    <label>Username: <input type="text" id="username"></label><br>
+    <label>Password: <input type="password" id="password"></label><br><br>
+    
+    <button onclick="startStream()">Start Stream</button>
+    <button onclick="stopStream()">Stop Stream</button>
+
+    <script>
+        let mediaRecorder;
+        let isStreaming = false;
+
+        async function startStream() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+
+            try {
+                // Access the user's microphone
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                let audioChunks = [];
+
+                mediaRecorder.ondataavailable = async (event) => {
+                    audioChunks.push(event.data);
+
+                    // Send audio chunk to the server
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    console.log("sending chucks to server")
+                    const response = await fetch(`/startstream?username=${username}&password=${password}`, {
+                        method: 'POST',
+                        body: audioBlob
+                    });
+
+                    if (!response.ok) {
+                        console.error('Error sending audio chunk');
+                    }
+
+                    // Clear audio chunks
+                    audioChunks = [];
+                };
+
+                mediaRecorder.onstart = () => {
+                    isStreaming = true;
+                    console.log('Recording started');
+                };
+
+                mediaRecorder.start(1000); // Send audio chunks every 1 second
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+            }
+        }
+
+        async function stopStream() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (mediaRecorder && isStreaming) {
+                mediaRecorder.stop();
+                isStreaming = false;
+                console.log('Recording stopped');
+
+                // Inform server to stop the stream
+                const response = await fetch(`/stopstream?username=${username}&password=${password}`);
+                if (!response.ok) {
+                    console.error('Error stopping stream');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
